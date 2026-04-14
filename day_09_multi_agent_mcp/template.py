@@ -323,7 +323,8 @@ class MCPServer:
 
     def __init__(self, name: str = "mcp-server") -> None:
         # TODO: store name and initialise self._tools: dict[str, Callable] = {}
-        pass
+        self.name = name
+        self._tools: dict[str, Callable] = {}
 
     def register_tool(self, name: str, func: Callable[..., Any]) -> None:
         """
@@ -334,7 +335,7 @@ class MCPServer:
             func: The function to call when this tool is invoked.
         """
         # TODO
-        raise NotImplementedError("Implement MCPServer.register_tool")
+        self._tools[name] = func
 
     def call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -351,12 +352,18 @@ class MCPServer:
             KeyError if the tool is not registered.
         """
         # TODO: look up and call the tool
-        raise NotImplementedError("Implement MCPServer.call_tool")
+        if name not in self._tools:
+            raise KeyError(f"Tool '{name}' not found.")
+        
+        result = self._tools[name](**args)
+        if not isinstance(result, dict):
+            return {"result": result}
+        return result
 
     def list_tools(self) -> list[str]:
         """Return list of all registered tool names."""
         # TODO
-        raise NotImplementedError("Implement MCPServer.list_tools")
+        return list(self._tools.keys())
 
 
 class MCPClient:
@@ -366,12 +373,12 @@ class MCPClient:
 
     def __init__(self, server: MCPServer) -> None:
         # TODO: store server reference
-        pass
+        self.server = server
 
     def list_tools(self) -> list[str]:
         """Return all tool names from the server."""
         # TODO
-        raise NotImplementedError("Implement MCPClient.list_tools")
+        return self.server.list_tools()
 
     def use_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -385,7 +392,7 @@ class MCPClient:
             Tool result dict.
         """
         # TODO
-        raise NotImplementedError("Implement MCPClient.use_tool")
+        return self.server.call_tool(name, args)
 
 
 # ---------------------------------------------------------------------------
