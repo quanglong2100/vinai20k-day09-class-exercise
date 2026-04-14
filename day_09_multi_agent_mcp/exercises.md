@@ -12,18 +12,34 @@
 Before writing any code, design a multi-agent system for YOUR domain (from Day 2):
 
 **Name your Supervisor agent and at least 2 specialized Worker agents:**
-- Supervisor: _______________
-- Worker 1 (name + specialty): _______________
-- Worker 2 (name + specialty): _______________
-- Worker 3 (optional): _______________
+- Supervisor: Travel Operations Coordinator
+- Worker 1 (name + specialty): FlightAnalyst — Searching flight routes, pricing, and availability.
+- Worker 2 (name + specialty): HotelResearcher — Finding accommodations based on budget and amenities.
+- Worker 3 (optional): LocalGuide — Planning daily itineraries and suggesting local attractions.
 
 **Draw the message flow as ASCII art (Supervisor → routing → Worker → response → Supervisor):**
 ```
-[paste your ASCII diagram here]
+[ User Query ]
+            |
+            v
+    [ SupervisorAgent ] <-----------------------+
+            |                                   |
+    (1) route_task()                            |
+            |                                   |
+            +------> [ Worker: FlightAnalyst ]--+ (2) response
+            |                                   |
+            +------> [ Worker: HotelResearcher ]+ (2) response
+            |                                   |
+            +------> [ Worker: LocalGuide ]-----+ (2) response
+            |
+    (3) aggregate_results()
+            |
+            v
+      [ Final Answer ]
 ```
 
 **What routing logic would your Supervisor use to decide which worker gets each task?**
-> *Your answer:*
+The Supervisor uses a keyword-based overlap strategy. It tokenizes the user's task description and compares it against the specialty descriptions of each worker. For example, if the query contains "flight" or "airline," it routes to the FlightAnalyst. If no strong overlap is found, it defaults to the most general-purpose worker.
 
 ---
 
@@ -35,13 +51,13 @@ Fill in this comparison table:
 | Aspect | Pipeline Pattern | Supervisor-Worker Pattern |
 |--------|-----------------|--------------------------|
 | Task flow | Sequential | Routed |
-| Best for | | |
-| Failure mode | | |
-| Example use case | | |
+| Best for | Fixed, multi-step workflows | Dynamic tasks with unknown sub-tasks |
+| Failure mode | Cascading (if Step 1 fails, Step 2 stops) | Isolated (one worker failing doesn't stop others) |
+| Example use case | Translation -> Summarization | Customer Support (Billing vs. Tech Support) |
 
 **Give a concrete scenario from your domain where Pipeline is better, and one where Supervisor-Worker is better:**
-> Pipeline is better when:
-> Supervisor-Worker is better when:
+Pipeline is better when: Processing a booking confirmation. Step 1: Extract data from email -> Step 2: Validate against database -> Step 3: Generate PDF receipt. Each step depends strictly on the output of the previous one.
+Supervisor-Worker is better when: Handling a general user query like "Help me plan a trip to Tokyo." The Supervisor must decide whether the user needs flight info, hotel info, or sightseeing info (or all three) and delegate accordingly.
 
 ---
 
