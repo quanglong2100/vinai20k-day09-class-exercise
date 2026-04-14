@@ -31,11 +31,11 @@ class AgentMessage:
         context:               Additional context data (dict).
         expected_output_format: How the response should be formatted.
     """
-    # TODO: define five fields
-    # Hints:
-    #   context: dict = field(default_factory=dict)
-    #   expected_output_format: str = "plain text"
-    pass
+    sender: str
+    receiver: str
+    task: str
+    context: dict = field(default_factory=dict)
+    expected_output_format: str = "plain text"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict (for trace logging)."""
@@ -69,8 +69,9 @@ class WorkerAgent:
             specialty: Domain description (e.g. "web research and fact-finding").
             llm_fn:    Function str → str (the LLM).
         """
-        # TODO: store name, specialty, llm_fn
-        pass
+        self.name = name
+        self.specialty = specialty
+        self.llm_fn = llm_fn
 
     def get_capability_description(self) -> str:
         """
@@ -80,8 +81,7 @@ class WorkerAgent:
         Returns:
             e.g. "ResearchAgent: Specializes in web research and fact-finding."
         """
-        # TODO
-        raise NotImplementedError("Implement get_capability_description")
+        return f"{self.name}: Specializes in {self.specialty}."
 
     def process(self, message: AgentMessage) -> AgentMessage:
         """
@@ -99,8 +99,20 @@ class WorkerAgent:
         Returns:
             AgentMessage — the worker's response.
         """
-        # TODO
-        raise NotImplementedError("Implement WorkerAgent.process")
+        # 1. Build a prompt
+        prompt = f"Task: {message.task}\nContext: {message.context}\nFormat: {message.expected_output_format}"
+        
+        # 2. Call llm_fn
+        llm_result = self.llm_fn(prompt)
+        
+        # 3. Return a new AgentMessage
+        return AgentMessage(
+            sender=self.name,
+            receiver=message.sender,
+            task=message.task,
+            context={"result": llm_result, "original_context": message.context},
+            expected_output_format=message.expected_output_format
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +137,11 @@ class SupervisorAgent:
         """
         # TODO: store workers (build dict by name) and llm_fn
         # TODO: initialise self._trace: list[dict] = []
-        pass
+        self.workers = workers
+        self.worker_map = {w.name: w for w in workers}
+        self.llm_fn = llm_fn
+        self._trace: list[dict] = []
+        self._worker_call_counts = {w.name: 0 for w in workers}
 
     def route(self, task: str) -> WorkerAgent:
         """
@@ -143,7 +159,18 @@ class SupervisorAgent:
             A WorkerAgent instance.
         """
         # TODO: implement keyword-based routing
-        raise NotImplementedError("Implement SupervisorAgent.route")
+        task_words = set(task.lower().split())
+        best_worker = self.workers[0]
+        max_overlap = -1
+
+        for worker in self.workers:
+            desc_words = set(worker.get_capability_description().lower().replace(':', '').replace('.', '').split())
+            overlap = len(task_words.intersection(desc_words))
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_worker = worker
+        
+        return best_worker
 
     def run(self, task: str) -> dict[str, Any]:
         """
@@ -165,7 +192,31 @@ class SupervisorAgent:
                 "trace"  (list[dict]) — list of AgentMessage.to_dict() entries
         """
         # TODO
-        raise NotImplementedError("Implement SupervisorAgent.run")
+        self._trace = []
+        
+        # Route
+        worker = self.route(task)
+        self._worker_call_counts[worker.name] += 1
+        
+        # Outgoing message
+        msg = AgentMessage(
+            sender="Supervisor",
+            receiver=worker.name,
+            task=task
+        )
+        self._trace.append(msg.to_dict())
+        
+        # Process
+        response = worker.process(msg)
+        self._trace.append(response.to_dict())
+        
+        # Aggregate
+        final_answer = self.aggregate_results([response])
+        
+        return {
+            "result": final_answer,
+            "trace": self._trace
+        }
 
     def get_worker_stats(self) -> dict:
         """Return call count per worker across all run() calls.
@@ -176,7 +227,7 @@ class SupervisorAgent:
         TODO: Track calls per worker and return the counts
         Note: You may need to add a self._worker_call_counts dict in __init__
         """
-        raise NotImplementedError
+        return self._worker_call_counts
 
     def aggregate_results(self, results: list[AgentMessage]) -> str:
         """
@@ -189,7 +240,11 @@ class SupervisorAgent:
             A combined answer string.
         """
         # TODO: join result contexts into a summary string
-        raise NotImplementedError("Implement SupervisorAgent.aggregate_results")
+        summaries = []
+        for msg in results:
+            res = msg.context.get("result", "")
+            summaries.append(str(res))
+        return " | ".join(summaries)
 
 
 class PipelineAgent:
@@ -224,7 +279,26 @@ class PipelineAgent:
 
         TODO: Chain agents, collect trace, return result dict
         """
-        raise NotImplementedError
+        self._pipeline_trace = []
+        current_task = initial_task
+        sender = "PipelineSupervisor"
+
+        for agent in self.agents:
+            msg = AgentMessage(sender=sender, receiver=agent.name, task=current_task)
+            self._pipeline_trace.append(msg.to_dict())
+            
+            response = agent.process(msg)
+            self._pipeline_trace.append(response.to_dict())
+            
+            # The result of the LLM becomes the task for the next agent
+            current_task = response.context.get("result", "")
+            sender = agent.name
+
+        return {
+            'result': current_task,
+            'steps': len(self.agents),
+            'trace': self._pipeline_trace
+        }
 
     def get_pipeline_trace(self) -> list:
         """Return the trace from the most recent run() call.
@@ -234,7 +308,7 @@ class PipelineAgent:
 
         TODO: Return self._pipeline_trace
         """
-        raise NotImplementedError
+        return self._pipeline_trace
 
 
 # ---------------------------------------------------------------------------
